@@ -76,7 +76,7 @@ struct DigBickApp: App {
             }
             CommandGroup(after: .appInfo) {
                 Button("Support Development") {
-                    if let url = URL(string: "https://paypal.me/REPLACE_ME") {
+                    if let url = URL(string: "https://paypal.me/satriyobud") {
                         NSWorkspace.shared.open(url)
                     }
                 }

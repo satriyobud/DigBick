@@ -41,8 +41,10 @@ DigBick does not collect analytics, telemetry, or personal data. All parsing and
 
 ## Support
 
-DigBick is free forever.  
-If it helps you, you can support development via PayPal.
+DigBick is, and always will be, completely free and open-source.  
+If you find it useful and want to support its continued development, you can buy me a coffee!
+
+[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-00457C.svg?style=for-the-badge&logo=paypal)](https://paypal.me/satriyobud)
 
 ## License
 
