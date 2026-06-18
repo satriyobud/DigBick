@@ -11,6 +11,8 @@ No plugins.
 No editing.  
 Just Markdown.
 
+![DigBick Screenshot](screenshot.png)
+
 ## Features
 
 - **Viewer Only:** No editing, no plugins, no vaults. Just pure Markdown.
