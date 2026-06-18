@@ -73,6 +73,13 @@ struct DigBickApp: App {
                     appState.showTOCSidebar.toggle()
                 }
                 .keyboardShortcut("t", modifiers: [.command])
+                
+                Divider()
+                
+                Button(appState.isReadingMode ? "Exit Reading Mode" : "Enter Reading Mode") {
+                    appState.toggleReadingMode()
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
             }
             CommandGroup(after: .appInfo) {
                 Button("Support Development") {

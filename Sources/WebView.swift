@@ -1,6 +1,18 @@
 import SwiftUI
 import WebKit
 
+class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+    
+    init(_ delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+    }
+    
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
+    }
+}
+
 struct WebView: NSViewRepresentable {
     let htmlContent: String
     let baseURL: URL
@@ -9,7 +21,11 @@ struct WebView: NSViewRepresentable {
     @Binding var isSearching: Bool
     @Binding var scrollToHeading: String?
     
+    var savedScrollY: Double?
+    
     var onHeadingsReceived: (([HeadingNode]) -> Void)?
+    var onScroll: ((Double) -> Void)?
+    var onActiveHeading: ((String) -> Void)?
     
     func makeNSView(context: Context) -> WKWebView {
         let prefs = WKPreferences()
@@ -19,14 +35,15 @@ struct WebView: NSViewRepresentable {
         config.preferences = prefs
         config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
         
-        // Add TOC message handler
-        config.userContentController.add(context.coordinator, name: "digbickTOC")
+        let weakHandler = WeakScriptMessageHandler(context.coordinator)
+        config.userContentController.add(weakHandler, name: "digbickTOC")
+        config.userContentController.add(weakHandler, name: "digbickHeading")
+        config.userContentController.add(weakHandler, name: "digbickScroll")
         
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
         
-        // Hide background so native dark mode can blend
         webView.setValue(false, forKey: "drawsBackground")
         
         return webView
@@ -34,27 +51,30 @@ struct WebView: NSViewRepresentable {
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
         if context.coordinator.lastLoadedContent != htmlContent {
+            context.coordinator.didRestoreScroll = false
             nsView.loadHTMLString(htmlContent, baseURL: baseURL)
             context.coordinator.lastLoadedContent = htmlContent
         }
         
-        // Handle find
         if isSearching && !searchText.isEmpty {
             let config = WKFindConfiguration()
             config.caseSensitive = false
             config.wraps = true
-            nsView.find(searchText, configuration: config) { result in
-                // Find completed
-            }
+            nsView.find(searchText, configuration: config) { _ in }
         }
         
-        // Handle scroll to heading
         if let headingId = scrollToHeading {
             nsView.evaluateJavaScript("window.digbickScrollToHeading('\(headingId)')")
             DispatchQueue.main.async {
                 self.scrollToHeading = nil
             }
         }
+    }
+    
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickTOC")
+        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickHeading")
+        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickScroll")
     }
     
     func makeCoordinator() -> Coordinator {
@@ -64,9 +84,19 @@ struct WebView: NSViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebView
         var lastLoadedContent: String?
+        var didRestoreScroll = false
         
         init(_ parent: WebView) {
             self.parent = parent
+        }
+        
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            if !didRestoreScroll {
+                if let y = parent.savedScrollY {
+                    webView.evaluateJavaScript("if (window.digbickRestoreScroll) { window.digbickRestoreScroll(\(y)); }")
+                }
+                didRestoreScroll = true
+            }
         }
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -82,32 +112,34 @@ struct WebView: NSViewRepresentable {
                 DispatchQueue.main.async {
                     self.parent.onHeadingsReceived?(nodes)
                 }
+            } else if message.name == "digbickHeading", let id = message.body as? String {
+                DispatchQueue.main.async {
+                    self.parent.onActiveHeading?(id)
+                }
+            } else if message.name == "digbickScroll", let y = message.body as? Double {
+                DispatchQueue.main.async {
+                    self.parent.onScroll?(y)
+                }
             }
         }
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if let url = navigationAction.request.url {
-                // If it's the base URL or about:blank, allow it
                 if url.absoluteString == "about:blank" || url == parent.baseURL || url.isFileURL && url.path == parent.baseURL.path {
                     decisionHandler(.allow)
                     return
                 }
                 
-                // For other links
                 if navigationAction.navigationType == .linkActivated {
                     if url.isFileURL {
-                        // If it's a markdown file, we might want to open it in DigBick
                         if ["md", "markdown", "mdown"].contains(url.pathExtension.lowercased()) {
-                            // Tell the app to open it
                             DispatchQueue.main.async {
                                 NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, _ in }
                             }
                         } else {
-                            // Let the system handle it
                             NSWorkspace.shared.open(url)
                         }
                     } else if url.scheme == "http" || url.scheme == "https" {
-                        // Open in default browser
                         NSWorkspace.shared.open(url)
                     }
                     decisionHandler(.cancel)

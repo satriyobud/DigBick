@@ -6,6 +6,11 @@ struct HeadingNode: Identifiable, Equatable {
     let level: Int
 }
 
+struct ScrollEntry: Codable {
+    let y: Double
+    let updatedAt: Date
+}
+
 class FileNode: Identifiable, ObservableObject {
     let id: URL
     let url: URL

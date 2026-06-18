@@ -7,6 +7,9 @@ class DocumentManager: ObservableObject {
     @Published var baseURL: URL?
     @Published var error: String?
     
+    @Published var wordCount: Int = 0
+    @Published var readingTime: Int = 0
+    
     // Workspaces & sidebars
     @Published var workspaceURL: URL?
     @Published var fileNodes: [FileNode] = []
@@ -14,15 +17,18 @@ class DocumentManager: ObservableObject {
     
     private var fileWatcher: FileWatcher?
     
+    // Scroll state
+    private var savedScrollPositions: [String: ScrollEntry] = [:]
+    var currentScrollY: Double? = nil
+    
     init() {
+        loadScrollPositions()
         restoreLastSession()
     }
     
     private func restoreLastSession() {
         if let workspacePath = UserDefaults.standard.string(forKey: "lastWorkspaceURL"),
            let url = URL(string: workspacePath) {
-            
-            // Just check if it exists simply for MVP
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
                 openWorkspace(at: url)
@@ -60,7 +66,11 @@ class DocumentManager: ObservableObject {
     }
     
     func openFile(at url: URL) {
-        // Resolve security scoping if opened via standard open panel or drag
+        // Save previous file's scroll position before switching
+        if let prevURL = currentURL, let prevY = currentScrollY {
+            saveScrollPosition(y: prevY, for: prevURL)
+        }
+        
         let accessing = url.startAccessingSecurityScopedResource()
         defer {
             if accessing {
@@ -70,8 +80,16 @@ class DocumentManager: ObservableObject {
         
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
+            
+            // Simple word count and reading time (approx 250 wpm)
+            let words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+            let time = max(1, Int(ceil(Double(words) / 250.0)))
+            
             DispatchQueue.main.async {
+                self.wordCount = words
+                self.readingTime = time
                 self.tocHeadings.removeAll() // Clear TOC immediately
+                self.currentScrollY = nil // Reset current scroll for new file
                 self.currentURL = url
                 self.baseURL = url.deletingLastPathComponent()
                 self.error = nil
@@ -120,7 +138,6 @@ class DocumentManager: ObservableObject {
             return
         }
         
-        // Escape markdown for JS injection
         let escapedMarkdown = markdown
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
@@ -132,5 +149,37 @@ class DocumentManager: ObservableObject {
             .replacingOccurrences(of: "{{MARKDOWN_CONTENT}}", with: escapedMarkdown)
             
         self.content = html
+    }
+    
+    // MARK: - Scroll State Management
+    
+    private func loadScrollPositions() {
+        if let data = UserDefaults.standard.data(forKey: "savedScrollPositions"),
+           let decoded = try? JSONDecoder().decode([String: ScrollEntry].self, from: data) {
+            self.savedScrollPositions = decoded
+        }
+    }
+    
+    func saveScrollPosition(y: Double, for url: URL) {
+        let key = url.standardizedFileURL.path
+        savedScrollPositions[key] = ScrollEntry(y: y, updatedAt: Date())
+        
+        // Limit to 100 entries to prevent unbounded growth
+        if savedScrollPositions.count > 100 {
+            let sorted = savedScrollPositions.sorted { $0.value.updatedAt < $1.value.updatedAt }
+            let toRemove = sorted.prefix(savedScrollPositions.count - 100)
+            for (k, _) in toRemove {
+                savedScrollPositions.removeValue(forKey: k)
+            }
+        }
+        
+        if let encoded = try? JSONEncoder().encode(savedScrollPositions) {
+            UserDefaults.standard.set(encoded, forKey: "savedScrollPositions")
+        }
+    }
+    
+    func getScrollPosition(for url: URL) -> Double? {
+        let key = url.standardizedFileURL.path
+        return savedScrollPositions[key]?.y
     }
 }

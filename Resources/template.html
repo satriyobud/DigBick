@@ -8,10 +8,30 @@
         /* Injected CSS */
         {{CSS}}
         
+        :root {
+            --dig-doc-bg: #FEFEFE;
+            --dig-link-color: #286BC3;
+            --dig-inline-bg: #EEF0F2;
+            --dig-code-bg: #F7F8FA;
+            --dig-code-border: #D9DEE5;
+            --dig-text-color: #1F2328;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --dig-doc-bg: #161719;
+                --dig-link-color: #6EA8FF;
+                --dig-inline-bg: #25272B;
+                --dig-code-bg: #1F2125;
+                --dig-code-border: #34363B;
+                --dig-text-color: #c9d1d9;
+            }
+        }
+
         body {
             margin: 0;
             padding: 40px;
-            background-color: transparent; /* Let native dark mode handle bg */
+            background-color: var(--dig-doc-bg);
         }
         
         /* Base typography adjustments to feel more native */
@@ -23,6 +43,23 @@
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
             background-color: transparent !important;
+            color: var(--dig-text-color) !important;
+        }
+        
+        /* Soften code block backgrounds */
+        .markdown-body pre {
+            background-color: var(--dig-code-bg) !important;
+            border-radius: 8px !important;
+            border: 1px solid var(--dig-code-border) !important;
+        }
+        
+        .markdown-body code {
+            background-color: var(--dig-inline-bg) !important;
+            border-radius: 4px !important;
+        }
+        
+        .markdown-body a {
+            color: var(--dig-link-color) !important;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -92,7 +129,65 @@
             if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickTOC) {
                 window.webkit.messageHandlers.digbickTOC.postMessage(headings);
             }
+            
+            // Throttled Scroll Tracker for Heading Highlight
+            let headingTimeout;
+            let scrollTimeout;
+            let activeHeadingId = null;
+            const headingElements = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+            
+            window.addEventListener('scroll', () => {
+                // Debounce saving scroll position
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickScroll) {
+                        window.webkit.messageHandlers.digbickScroll.postMessage(window.scrollY);
+                    }
+                }, 500);
+                
+                // Throttle active heading check (faster response)
+                if (!headingTimeout) {
+                    headingTimeout = setTimeout(() => {
+                        let currentActive = null;
+                        // Find the last heading that is above the middle of the viewport
+                        const triggerY = window.innerHeight * 0.3; // Top 30% of screen
+                        for (let i = 0; i < headingElements.length; i++) {
+                            const rect = headingElements[i].getBoundingClientRect();
+                            if (rect.top <= triggerY) {
+                                currentActive = headingElements[i].id;
+                            } else {
+                                break; // Headings are in order, no need to check further
+                            }
+                        }
+                        
+                        // If scrolled to very top, clear active or set to first
+                        if (!currentActive && headingElements.length > 0) {
+                            currentActive = headingElements[0].id;
+                        }
+                        
+                        if (currentActive && currentActive !== activeHeadingId) {
+                            activeHeadingId = currentActive;
+                            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickHeading) {
+                                window.webkit.messageHandlers.digbickHeading.postMessage(activeHeadingId);
+                            }
+                        }
+                        headingTimeout = null;
+                    }, 100);
+                }
+            });
         });
+        
+        window.digbickRestoreScroll = function(y) {
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    try {
+                        window.scrollTo(0, y);
+                    } catch (e) {
+                        // Fail silently
+                    }
+                }, 10);
+            });
+        };
     </script>
 </body>
 </html>
