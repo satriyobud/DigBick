@@ -13,33 +13,27 @@ Just Markdown.
 
 ## Features
 
-- Open `.md`, `.markdown`, and `.mdown`
-- GitHub-inspired Markdown rendering
-- Dark mode
-- Local images
-- Search
-- Auto reload
-- Open in external editor
-- Free forever
+- **Viewer Only:** No editing, no plugins, no vaults. Just pure Markdown.
+- **Formats:** Open `.md`, `.markdown`, and `.mdown`.
+- **Workspaces:** Drag a folder or press `⇧⌘O` to open a file tree sidebar.
+- **Table of Contents:** Outline sidebar with clickable headings (toggle with `⌘T`).
+- **Beautiful Rendering:** GitHub-inspired Markdown styling with dark mode support.
+- **Local Assets:** Perfectly resolves local images relative to your document.
+- **Auto Reload:** Instantly updates when the file is modified externally.
+- **Native Polish:** Lightweight macOS interface, fast search, and zero telemetry.
 
 ## Getting Started
 
-### Building
-You can use the provided `setup.sh` to generate the `.xcodeproj` dynamically:
+### Quick Build (No Xcode Required)
+If you have the macOS Command Line Tools installed, you can compile the app instantly:
 
 ```sh
-./setup.sh
+./build.sh
 ```
+This will generate `DigBick.app` right in the folder. Double-click it to run!
 
-Alternatively, open `DigBick.xcodeproj` if it is already generated.
-
-To build from command line:
-```sh
-xcodebuild -project DigBick.xcodeproj -scheme DigBick build
-```
-
-### Running
-Open `DigBick.xcodeproj` in Xcode, select the `DigBick` scheme and target your Mac, then press ⌘R.
+### Xcode Build
+You can also open the included `DigBick.xcodeproj` in Xcode, select the `DigBick` scheme targeting "My Mac", and press `⌘R`.
 
 ## Privacy
 
