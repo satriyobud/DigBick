@@ -26,6 +26,7 @@ struct WebView: NSViewRepresentable {
     var onHeadingsReceived: (([HeadingNode]) -> Void)?
     var onScroll: ((Double) -> Void)?
     var onActiveHeading: ((String) -> Void)?
+    var onFindResults: ((Int, Int) -> Void)?
     
     func makeNSView(context: Context) -> WKWebView {
         let prefs = WKPreferences()
@@ -39,6 +40,7 @@ struct WebView: NSViewRepresentable {
         config.userContentController.add(weakHandler, name: "digbickTOC")
         config.userContentController.add(weakHandler, name: "digbickHeading")
         config.userContentController.add(weakHandler, name: "digbickScroll")
+        config.userContentController.add(weakHandler, name: "digbickFindResults")
         
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -56,11 +58,22 @@ struct WebView: NSViewRepresentable {
             context.coordinator.lastLoadedContent = htmlContent
         }
         
-        if isSearching && !searchText.isEmpty {
-            let config = WKFindConfiguration()
-            config.caseSensitive = false
-            config.wraps = true
-            nsView.find(searchText, configuration: config) { _ in }
+        let queryChanged = context.coordinator.lastSearchText != searchText
+        let visibilityChanged = context.coordinator.lastIsSearching != isSearching
+        
+        if queryChanged || visibilityChanged {
+            context.coordinator.lastSearchText = searchText
+            context.coordinator.lastIsSearching = isSearching
+            
+            if isSearching {
+                if !searchText.isEmpty {
+                    nsView.evaluateJavaScript("window.digbickFind('\(searchText.replacingOccurrences(of: "'", with: "\\'"))')")
+                } else {
+                    nsView.evaluateJavaScript("window.digbickClearFind()")
+                }
+            } else {
+                nsView.evaluateJavaScript("window.digbickClearFind()")
+            }
         }
         
         if let headingId = scrollToHeading {
@@ -75,6 +88,7 @@ struct WebView: NSViewRepresentable {
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickTOC")
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickHeading")
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickScroll")
+        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickFindResults")
     }
     
     func makeCoordinator() -> Coordinator {
@@ -84,13 +98,33 @@ struct WebView: NSViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebView
         var lastLoadedContent: String?
+        var lastSearchText: String?
+        var lastIsSearching: Bool?
         var didRestoreScroll = false
         
         init(_ parent: WebView) {
             self.parent = parent
+            super.init()
+            NotificationCenter.default.addObserver(self, selector: #selector(handleFindNext), name: NSNotification.Name("DigBickFindNext"), object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleFindPrev), name: NSNotification.Name("DigBickFindPrev"), object: nil)
+        }
+        
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+        
+        weak var webViewInstance: WKWebView?
+        
+        @objc func handleFindNext() {
+            webViewInstance?.evaluateJavaScript("window.digbickFindNext()")
+        }
+        
+        @objc func handleFindPrev() {
+            webViewInstance?.evaluateJavaScript("window.digbickFindPrevious()")
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            self.webViewInstance = webView
             if !didRestoreScroll {
                 if let y = parent.savedScrollY {
                     webView.evaluateJavaScript("if (window.digbickRestoreScroll) { window.digbickRestoreScroll(\(y)); }")
@@ -119,6 +153,10 @@ struct WebView: NSViewRepresentable {
             } else if message.name == "digbickScroll", let y = message.body as? Double {
                 DispatchQueue.main.async {
                     self.parent.onScroll?(y)
+                }
+            } else if message.name == "digbickFindResults", let dict = message.body as? [String: Int], let total = dict["total"], let current = dict["currentIndex"] {
+                DispatchQueue.main.async {
+                    self.parent.onFindResults?(total, current)
                 }
             }
         }

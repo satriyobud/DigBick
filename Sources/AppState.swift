@@ -7,6 +7,17 @@ class AppState: ObservableObject {
     @Published var isReadingMode: Bool = false
     @Published var activeHeadingId: String? = nil
     
+    // Search & Find States
+    @Published var isQuickOpenVisible: Bool = false
+    @Published var quickOpenQuery: String = ""
+    @Published var sidebarSearchQuery: String = ""
+    @Published var focusSidebarSearch: Bool = false
+    
+    @Published var isFindBarVisible: Bool = false
+    @Published var findQuery: String = ""
+    @Published var findMatchCount: Int = 0
+    @Published var findCurrentIndex: Int = 0
+    
     private var cachedFileSidebarState: Bool = false
     private var cachedTOCSidebarState: Bool = false
     
@@ -23,6 +34,8 @@ class AppState: ObservableObject {
             
             showFileSidebar = false
             showTOCSidebar = false
+            isQuickOpenVisible = false
+            isFindBarVisible = false
             isReadingMode = true
         }
     }

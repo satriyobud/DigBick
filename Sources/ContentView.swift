@@ -51,149 +51,149 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.colorScheme) var colorScheme
     
-    @State private var showingSearch = false
-    @State private var searchText = ""
     @State private var scrollToHeading: String? = nil
 
     var colors: AppColors { AppColors(scheme: colorScheme) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(colors.divider)
-                .frame(height: 1)
-                
-            HSplitView {
-                // Left File Sidebar
-                if !appState.isReadingMode && appState.showFileSidebar && documentManager.workspaceURL != nil {
-                    FileSidebarView(nodes: documentManager.fileNodes)
-                        .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
-                }
-                
-                // Main Content
-                ZStack {
-                    colors.docBg.edgesIgnoringSafeArea(.all)
+        ZStack {
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(colors.divider)
+                    .frame(height: 1)
                     
-                    if let content = documentManager.content, let baseURL = documentManager.baseURL, let currentURL = documentManager.currentURL {
-                        WebView(
-                            htmlContent: content,
-                            baseURL: baseURL,
-                            searchText: $searchText,
-                            isSearching: $showingSearch,
-                            scrollToHeading: $scrollToHeading,
-                            savedScrollY: documentManager.getScrollPosition(for: currentURL),
-                            onHeadingsReceived: { headings in
-                                documentManager.tocHeadings = headings
-                            },
-                            onScroll: { y in
-                                documentManager.currentScrollY = y
-                            },
-                            onActiveHeading: { id in
-                                appState.activeHeadingId = id
-                            }
-                        )
-                        .edgesIgnoringSafeArea(.all)
+                HSplitView {
+                    // Left File Sidebar
+                    if !appState.isReadingMode && appState.showFileSidebar && documentManager.workspaceURL != nil {
+                        FileSidebarView(nodes: documentManager.fileNodes)
+                            .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
+                    }
+                    
+                    // Main Content
+                    ZStack(alignment: .topTrailing) {
+                        colors.docBg.edgesIgnoringSafeArea(.all)
                         
-                        if showingSearch {
-                            VStack {
-                                HStack {
-                                    Image(systemName: "magnifyingglass")
-                                    TextField("Find...", text: $searchText)
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                                        .frame(width: 200)
-                                    Button("Done") {
-                                        showingSearch = false
-                                        searchText = ""
-                                    }
+                        if let content = documentManager.content, let baseURL = documentManager.baseURL, let currentURL = documentManager.currentURL {
+                            WebView(
+                                htmlContent: content,
+                                baseURL: baseURL,
+                                searchText: $appState.findQuery,
+                                isSearching: $appState.isFindBarVisible,
+                                scrollToHeading: $scrollToHeading,
+                                savedScrollY: documentManager.getScrollPosition(for: currentURL),
+                                onHeadingsReceived: { headings in
+                                    documentManager.tocHeadings = headings
+                                },
+                                onScroll: { y in
+                                    documentManager.currentScrollY = y
+                                },
+                                onActiveHeading: { id in
+                                    appState.activeHeadingId = id
+                                },
+                                onFindResults: { total, current in
+                                    appState.findMatchCount = total
+                                    appState.findCurrentIndex = current
                                 }
-                                .padding()
-                                .background(VisualEffectBlur(material: .hudWindow, blendingMode: .withinWindow))
-                                .cornerRadius(8)
-                                .shadow(radius: 5)
-                                .padding(.top, 10)
-                                
-                                Spacer()
-                            }
-                        }
-                    } else {
-                        VStack(spacing: 16) {
-                            Text("DigBick")
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
-                                .foregroundColor(colors.sidebarPrimary)
+                            )
+                            .edgesIgnoringSafeArea(.all)
                             
-                            Text(documentManager.error ?? "Drop a Markdown file or folder here")
-                                .foregroundColor(colors.sidebarSecondary)
-                                .multilineTextAlignment(.center)
-                                
-                            HStack(spacing: 20) {
-                                Button("Open File...") {
-                                    openFilePanel()
-                                }
-                                Button("Open Folder...") {
-                                    openFolderPanel()
-                                }
+                        if appState.isFindBarVisible {
+                                FindBarView(
+                                    onFind: { _ in
+                                        // The WebView already observes $appState.findQuery
+                                    },
+                                    onNext: {
+                                        NotificationCenter.default.post(name: NSNotification.Name("DigBickFindNext"), object: nil)
+                                    },
+                                    onPrev: {
+                                        NotificationCenter.default.post(name: NSNotification.Name("DigBickFindPrev"), object: nil)
+                                    },
+                                    onClose: {
+                                        appState.isFindBarVisible = false
+                                        appState.findQuery = ""
+                                    }
+                                )
+                                .padding(.top, 10)
+                                .padding(.trailing, 20)
                             }
-                            .padding(.top)
+                        } else {
+                            VStack(spacing: 16) {
+                                Text("DigBick")
+                                    .font(.largeTitle)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(colors.sidebarPrimary)
+                                
+                                Text(documentManager.error ?? "Drop a Markdown file or folder here")
+                                    .foregroundColor(colors.sidebarSecondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(minWidth: 400, idealWidth: 860, maxWidth: .infinity, minHeight: 300, idealHeight: 600, maxHeight: .infinity)
+                    
+                    // Right TOC Sidebar
+                    if !appState.isReadingMode && appState.showTOCSidebar && documentManager.currentURL != nil {
+                        TOCSidebarView(headings: documentManager.tocHeadings, onSelect: { id in
+                            scrollToHeading = id
+                        })
+                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 340)
                     }
                 }
-                .frame(minWidth: 400, idealWidth: 860, maxWidth: .infinity, minHeight: 300, idealHeight: 600, maxHeight: .infinity)
+            }
+            .background(colors.appBg)
+            .navigationTitle(documentManager.currentURL != nil ? "DigBick — \(documentManager.currentURL!.lastPathComponent)" : "DigBick")
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button(action: { appState.showFileSidebar.toggle() }) {
+                        Image(systemName: "sidebar.left")
+                    }
+                    .help("Toggle File Sidebar")
+                }
                 
-                // Right TOC Sidebar
-                if !appState.isReadingMode && appState.showTOCSidebar && documentManager.currentURL != nil {
-                    TOCSidebarView(headings: documentManager.tocHeadings, onSelect: { id in
-                        scrollToHeading = id
-                    })
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 340)
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { appState.showTOCSidebar.toggle() }) {
+                        Image(systemName: "list.bullet.indent")
+                    }
+                    .help("Toggle Table of Contents")
                 }
             }
-        }
-        .background(colors.appBg)
-        .navigationTitle(documentManager.currentURL != nil ? "DigBick — \(documentManager.currentURL!.lastPathComponent)" : "DigBick")
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: { appState.showFileSidebar.toggle() }) {
-                    Image(systemName: "sidebar.left")
-                }
-                .help("Toggle File Sidebar")
+            .onChange(of: documentManager.currentURL) { _ in
+                appState.activeHeadingId = nil
+                appState.isFindBarVisible = false
+                appState.findQuery = ""
+                appState.findMatchCount = 0
+                appState.findCurrentIndex = 0
             }
             
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { appState.showTOCSidebar.toggle() }) {
-                    Image(systemName: "list.bullet.indent")
-                }
-                .help("Toggle Table of Contents")
+            if appState.isQuickOpenVisible {
+                QuickOpenView(isPresented: $appState.isQuickOpenVisible)
             }
-        }
-        .background(EventMonitorView(showingSearch: $showingSearch, searchText: $searchText))
-        .onChange(of: documentManager.currentURL) { _ in
-            appState.activeHeadingId = nil
-        }
-    }
-    
-    private func openFilePanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.plainText]
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            documentManager.openFile(at: url)
-        }
-    }
-    
-    private func openFolderPanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            documentManager.openWorkspace(at: url)
-            appState.showFileSidebar = true
+            
+            // Invisible keyboard shortcut hooks for reliability
+            Button("") { appState.isQuickOpenVisible = true }
+                .keyboardShortcut("p", modifiers: .command)
+                .opacity(0)
+            
+            Button("") { appState.isFindBarVisible = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                
+            Button("") {
+                if appState.isFindBarVisible {
+                    NotificationCenter.default.post(name: NSNotification.Name("DigBickFindNext"), object: nil)
+                }
+            }
+            .keyboardShortcut("g", modifiers: .command)
+            .opacity(0)
+            
+            Button("") {
+                if appState.isFindBarVisible {
+                    NotificationCenter.default.post(name: NSNotification.Name("DigBickFindPrev"), object: nil)
+                }
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .opacity(0)
         }
     }
 }
@@ -207,6 +207,25 @@ struct FileSidebarView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            // Header with Quick Open button
+            HStack {
+                Text("Explorer")
+                    .font(.headline)
+                    .foregroundColor(colors.sidebarPrimary)
+                Spacer()
+                Button(action: { appState.isQuickOpenVisible = true }) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(colors.sidebarSecondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Quick Open (Cmd+P)")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(colors.leftSidebarBg)
+            
+            Divider().background(colors.divider)
+            
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(nodes) { node in
@@ -244,17 +263,21 @@ struct FileNodeRow: View {
     let level: Int
     @EnvironmentObject var documentManager: DocumentManager
     @Environment(\.colorScheme) var colorScheme
-    @State private var isExpanded: Bool = true
     
     var colors: AppColors { AppColors(scheme: colorScheme) }
     var isSelected: Bool { documentManager.currentURL == node.url }
+    var isExpanded: Bool { documentManager.expandedFolders.contains(node.url) }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Button(action: {
                 if node.isDirectory {
                     withAnimation(.easeInOut(duration: 0.15)) {
-                        isExpanded.toggle()
+                        if isExpanded {
+                            documentManager.expandedFolders.remove(node.url)
+                        } else {
+                            documentManager.expandedFolders.insert(node.url)
+                        }
                     }
                 } else {
                     documentManager.openFile(at: node.url)
@@ -396,7 +419,7 @@ struct TOCSidebarView: View {
     }
 }
 
-// Visual Effect for search bar
+// Visual Effect for overlays
 struct VisualEffectBlur: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode
@@ -412,35 +435,5 @@ struct VisualEffectBlur: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
-    }
-}
-
-// To capture Cmd+F globally without complex responders in MVP
-struct EventMonitorView: NSViewRepresentable {
-    @Binding var showingSearch: Bool
-    @Binding var searchText: String
-
-    func makeNSView(context: Context) -> NSView {
-        let view = KeyCaptureView()
-        view.onCmdF = {
-            self.showingSearch = true
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
-class KeyCaptureView: NSView {
-    var onCmdF: (() -> Void)?
-    
-    override var acceptsFirstResponder: Bool { true }
-    
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "f" {
-            onCmdF?()
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
     }
 }

@@ -58,6 +58,19 @@
             border-radius: 4px !important;
         }
         
+        mark.digbick-find-match {
+            background-color: #FFD54F !important;
+            color: #000 !important;
+            border-radius: 2px;
+        }
+        
+        mark.digbick-find-active {
+            background-color: #FF9800 !important;
+            color: #000 !important;
+            border-radius: 2px;
+            box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.4);
+        }
+        
         .markdown-body a {
             color: var(--dig-link-color) !important;
         }
@@ -87,6 +100,113 @@
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+        };
+        
+        // FIND IN DOCUMENT LOGIC
+        window.digbickFindMatches = [];
+        window.digbickFindActiveIndex = -1;
+        
+        window.digbickClearFind = function() {
+            const marks = document.querySelectorAll('mark.digbick-find-match, mark.digbick-find-active');
+            marks.forEach(mark => {
+                const parent = mark.parentNode;
+                if (parent) {
+                    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+                    parent.normalize();
+                }
+            });
+            window.digbickFindMatches = [];
+            window.digbickFindActiveIndex = -1;
+            
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickFindResults) {
+                window.webkit.messageHandlers.digbickFindResults.postMessage({total: 0, currentIndex: 0});
+            }
+        };
+
+        window.digbickFind = function(query) {
+            window.digbickClearFind();
+            if (!query) return;
+
+            const container = document.getElementById('content');
+            if (!container) return;
+
+            // Escape regex for safety
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedQuery})`, 'gi');
+
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+                acceptNode: function(node) {
+                    if (node.parentNode && (node.parentNode.nodeName === 'SCRIPT' || node.parentNode.nodeName === 'STYLE')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            }, false);
+
+            let nodesToProcess = [];
+            let currentNode;
+            while (currentNode = walker.nextNode()) {
+                if (currentNode.nodeValue.match(regex)) {
+                    nodesToProcess.push(currentNode);
+                }
+            }
+
+            nodesToProcess.forEach(node => {
+                const fragment = document.createDocumentFragment();
+                const parts = node.nodeValue.split(regex);
+                parts.forEach(part => {
+                    if (part.toLowerCase() === query.toLowerCase()) {
+                        const mark = document.createElement('mark');
+                        mark.className = 'digbick-find-match';
+                        mark.textContent = part;
+                        fragment.appendChild(mark);
+                        window.digbickFindMatches.push(mark);
+                    } else if (part) {
+                        fragment.appendChild(document.createTextNode(part));
+                    }
+                });
+                if (node.parentNode) {
+                    node.parentNode.replaceChild(fragment, node);
+                }
+            });
+
+            if (window.digbickFindMatches.length > 0) {
+                window.digbickFindNext(); // Activate the first match
+            } else {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickFindResults) {
+                    window.webkit.messageHandlers.digbickFindResults.postMessage({total: 0, currentIndex: 0});
+                }
+            }
+        };
+
+        window.digbickUpdateFindActive = function() {
+            window.digbickFindMatches.forEach((mark, index) => {
+                if (index === window.digbickFindActiveIndex) {
+                    mark.className = 'digbick-find-active';
+                    mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    mark.className = 'digbick-find-match';
+                }
+            });
+            
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickFindResults) {
+                window.webkit.messageHandlers.digbickFindResults.postMessage({
+                    total: window.digbickFindMatches.length, 
+                    currentIndex: window.digbickFindActiveIndex + 1
+                });
+            }
+        };
+
+        window.digbickFindNext = function() {
+            if (window.digbickFindMatches.length === 0) return;
+            window.digbickFindActiveIndex = (window.digbickFindActiveIndex + 1) % window.digbickFindMatches.length;
+            window.digbickUpdateFindActive();
+        };
+
+        window.digbickFindPrevious = function() {
+            if (window.digbickFindMatches.length === 0) return;
+            window.digbickFindActiveIndex = (window.digbickFindActiveIndex - 1 + window.digbickFindMatches.length) % window.digbickFindMatches.length;
+            window.digbickUpdateFindActive();
         };
 
         document.addEventListener("DOMContentLoaded", () => {

@@ -13,7 +13,10 @@ class DocumentManager: ObservableObject {
     // Workspaces & sidebars
     @Published var workspaceURL: URL?
     @Published var fileNodes: [FileNode] = []
+    @Published var flatMarkdownFiles: [URL] = []
+    @Published var flatMarkdownEntries: [(url: URL, relativePath: String)] = []
     @Published var tocHeadings: [HeadingNode] = []
+    @Published var expandedFolders: Set<URL> = []
     
     private var fileWatcher: FileWatcher?
     
@@ -61,11 +64,51 @@ class DocumentManager: ObservableObject {
         }
         
         FileScanner.shared.scan(workspaceURL: url) { [weak self] nodes in
-            self?.fileNodes = nodes
+            DispatchQueue.main.async {
+                self?.fileNodes = nodes
+                self?.updateFlatMarkdownFiles(nodes: nodes)
+            }
         }
     }
     
+    private func updateFlatMarkdownFiles(nodes: [FileNode]) {
+        var flatList: [URL] = []
+        var entries: [(url: URL, relativePath: String)] = []
+        let rootPath = workspaceURL?.standardizedFileURL.path ?? ""
+        
+        func traverse(_ node: FileNode) {
+            if node.isDirectory {
+                if let children = node.children {
+                    for child in children { traverse(child) }
+                }
+            } else {
+                flatList.append(node.url)
+                let absPath = node.url.standardizedFileURL.path
+                let rel: String
+                if !rootPath.isEmpty && absPath.hasPrefix(rootPath) {
+                    rel = String(absPath.dropFirst(rootPath.count))
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                } else {
+                    rel = node.url.lastPathComponent
+                }
+                entries.append((url: node.url, relativePath: rel))
+            }
+        }
+        for node in nodes { traverse(node) }
+        self.flatMarkdownFiles = flatList
+        self.flatMarkdownEntries = entries
+    }
+    
     func openFile(at url: URL) {
+        if let root = workspaceURL {
+            var parentURL = url.deletingLastPathComponent()
+            while parentURL.path.count >= root.path.count {
+                expandedFolders.insert(parentURL)
+                if parentURL == root { break }
+                parentURL = parentURL.deletingLastPathComponent()
+            }
+        }
+        
         // Save previous file's scroll position before switching
         if let prevURL = currentURL, let prevY = currentScrollY {
             saveScrollPosition(y: prevY, for: prevURL)

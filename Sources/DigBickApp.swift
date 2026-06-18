@@ -52,6 +52,16 @@ struct DigBickApp: App {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandGroup(after: .newItem) {
+                Divider()
+                Button("Quick Open...") {
+                    if appState.showFileSidebar && !appState.isReadingMode {
+                        appState.focusSidebarSearch = true
+                    } else {
+                        appState.isQuickOpenVisible = true
+                    }
+                }
+                .keyboardShortcut("p", modifiers: .command)
+                
                 Button("Reload Current File") {
                     documentManager.reload()
                 }
