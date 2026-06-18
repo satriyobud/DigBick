@@ -1,0 +1,16 @@
+# Build artifacts
+.build/
+DigBick.app/
+DigBick/
+*.app
+
+# Xcode files
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+
+# OS files
+.DS_Store
+
+# Temporary files
+*.swp

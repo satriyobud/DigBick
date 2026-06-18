@@ -1,0 +1,35 @@
+name: DigBick
+options:
+  bundleIdPrefix: com.example
+  developmentLanguage: en
+  deploymentTarget:
+    macOS: 13.0
+targets:
+  DigBick:
+    type: application
+    platform: macOS
+    deploymentTarget: 13.0
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleName: DigBick
+        CFBundleDisplayName: DigBick
+        CFBundleIdentifier: com.example.DigBick
+        CFBundleShortVersionString: 1.0.0
+        CFBundleVersion: 1
+        CFBundleIconFile: AppIcon
+        LSMinimumSystemVersion: 13.0.0
+        NSPrincipalClass: NSApplication
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Markdown Document
+            CFBundleTypeExtensions:
+              - md
+              - markdown
+              - mdown
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Default
+        LSSupportsOpeningDocumentsInPlace: true

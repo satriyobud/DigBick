@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DigBick</title>
+    <style>
+        /* Injected CSS */
+        {{CSS}}
+        
+        body {
+            margin: 0;
+            padding: 40px;
+            background-color: transparent; /* Let native dark mode handle bg */
+        }
+        
+        /* Base typography adjustments to feel more native */
+        .markdown-body {
+            box-sizing: border-box;
+            min-width: 200px;
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: transparent !important;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                color: #c9d1d9;
+            }
+        }
+        
+        @media (max-width: 767px) {
+            .markdown-body {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <article class="markdown-body" id="content"></article>
+
+    <script>
+        // Injected marked.js
+        {{JS}}
+        
+        window.digbickScrollToHeading = function(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const markdown = `{{MARKDOWN_CONTENT}}`;
+            
+            let headings = [];
+            let slugCount = {};
+
+            const renderer = new marked.Renderer();
+            
+            renderer.heading = function({tokens, depth}) {
+                // Extract plain text for the ID
+                const text = this.parser.parseInline(tokens).replace(/<[^>]+>/g, '');
+                
+                // Generate a simple slug
+                let slug = text.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '');
+                if (!slug) slug = 'heading';
+                
+                if (slugCount[slug]) {
+                    slugCount[slug]++;
+                    slug = slug + '-' + slugCount[slug];
+                } else {
+                    slugCount[slug] = 1;
+                }
+                
+                headings.push({ level: depth, text: text, id: slug });
+                
+                return `<h${depth} id="${slug}">${this.parser.parseInline(tokens)}</h${depth}>\n`;
+            };
+
+            marked.setOptions({
+                gfm: true,
+                breaks: true,
+                renderer: renderer
+            });
+            
+            document.getElementById('content').innerHTML = marked.parse(markdown);
+            
+            // Send headings back to native app
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickTOC) {
+                window.webkit.messageHandlers.digbickTOC.postMessage(headings);
+            }
+        });
+    </script>
+</body>
+</html>
