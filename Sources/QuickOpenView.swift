@@ -1,18 +1,37 @@
 import SwiftUI
 
+// MARK: - Palette
+
 struct QuickOpenColors {
     let scheme: ColorScheme
-    
-    var panelBg: Color { scheme == .dark ? Color(hex: "#1C1D1F") : Color(hex: "#FAFAF8") }
-    var inputBg: Color { scheme == .dark ? Color(hex: "#242528") : Color(hex: "#FFFFFF") }
-    var resultHoverBg: Color { scheme == .dark ? Color(hex: "#303236") : Color(hex: "#ECE9E3") }
-    var divider: Color { scheme == .dark ? Color(hex: "#34363A") : Color(hex: "#DEDCD8") }
-    var primaryText: Color { scheme == .dark ? Color(hex: "#F2F3F5") : Color(hex: "#1F2328") }
-    var secondaryText: Color { scheme == .dark ? Color(hex: "#A0A4AA") : Color(hex: "#6F7478") }
-    var placeholderText: Color { scheme == .dark ? Color(hex: "#7D828A") : Color(hex: "#8A8F94") }
-    var iconColor: Color { scheme == .dark ? Color(hex: "#A0A4AA") : Color(hex: "#6F7478") }
-    var backdrop: Color { scheme == .dark ? Color.black.opacity(0.35) : Color.black.opacity(0.08) }
+
+    var panelBg: Color     { scheme == .dark ? Color(hex: "#1C1D1F") : Color(hex: "#FAFAF8") }
+    var inputBg: Color     { scheme == .dark ? Color(hex: "#242528") : Color(hex: "#FFFFFF") }
+    var inputBorder: Color { scheme == .dark ? Color(hex: "#3A3C40") : Color(hex: "#E7E3DC") }
+    var panelBorder: Color { scheme == .dark ? Color(hex: "#34363A") : Color(hex: "#DEDCD8") }
+    var divider: Color     { scheme == .dark ? Color(hex: "#2E3033") : Color(hex: "#E7E3DC") }
+    var selectedBg: Color  { scheme == .dark ? Color(hex: "#303236") : Color(hex: "#ECE9E3") }
+    var primary: Color     { scheme == .dark ? Color(hex: "#F2F3F5") : Color(hex: "#1F2328") }
+    var secondary: Color   { scheme == .dark ? Color(hex: "#A0A4AA") : Color(hex: "#6F7478") }
+    var placeholder: Color { scheme == .dark ? Color(hex: "#7D828A") : Color(hex: "#8A8F94") }
+    var icon: Color        { scheme == .dark ? Color(hex: "#888E96") : Color(hex: "#7A7F85") }
+    var footer: Color      { scheme == .dark ? Color(hex: "#777D84") : Color(hex: "#7A7F85") }
+    var keycapBg: Color    { scheme == .dark ? Color(hex: "#2E3033") : Color(hex: "#F1EFEB") }
+    var keycapBorder: Color { scheme == .dark ? Color(hex: "#44474C") : Color(hex: "#D8D4CC") }
+    var backdrop: Color    { scheme == .dark ? Color.black.opacity(0.35) : Color.black.opacity(0.07) }
+    var shadow: Color      { Color.black.opacity(scheme == .dark ? 0.45 : 0.13) }
 }
+
+// MARK: - Helper
+
+private func strippedName(_ url: URL) -> String {
+    let name = url.lastPathComponent
+    let mdExts: Set<String> = ["md", "markdown", "mdown"]
+    guard mdExts.contains(url.pathExtension.lowercased()) else { return name }
+    return String(name.dropLast(url.pathExtension.count + 1))
+}
+
+// MARK: - View
 
 struct QuickOpenView: View {
     @EnvironmentObject var documentManager: DocumentManager
@@ -23,15 +42,15 @@ struct QuickOpenView: View {
 
     @State private var query: String = ""
     @State private var selectedIndex: Int = 0
-    @FocusState private var isSearchFocused: Bool
+    @FocusState private var isFocused: Bool
 
-    var colors: QuickOpenColors { QuickOpenColors(scheme: colorScheme) }
+    var c: QuickOpenColors { QuickOpenColors(scheme: colorScheme) }
 
-    // Inline computed — re-runs every time `query` changes because @State triggers body re-evaluation
-    private var displayResults: [URL] {
+    // MARK: Filter
+
+    private var results: [URL] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         let all = documentManager.flatMarkdownFiles
-
         guard !q.isEmpty else { return all }
 
         if q.contains("/") {
@@ -45,152 +64,276 @@ struct QuickOpenView: View {
         }
     }
 
+    // MARK: Body
+
     var body: some View {
-        ZStack {
-            colors.backdrop
-                .edgesIgnoringSafeArea(.all)
-                .onTapGesture { dismiss() }
+        GeometryReader { geo in
+            let winW = geo.size.width
+            let winH = geo.size.height
 
-            VStack(spacing: 0) {
+            // Responsive dimensions
+            let panelW     = min(680, max(560, winW * 0.38))
+            let panelMaxH  = min(540, max(420, winH * 0.62))
+            let topInset   = max(100, winH * 0.18)
 
-                // Search input
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16))
-                        .foregroundColor(colors.iconColor)
+            ZStack(alignment: .top) {
+                // ── Backdrop ──────────────────────────────────
+                c.backdrop
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture { dismiss() }
 
-                    ZStack(alignment: .leading) {
-                        if query.isEmpty {
-                            Text("Search files by name or path...")
-                                .foregroundColor(colors.placeholderText)
-                                .font(.system(size: 16))
-                                .allowsHitTesting(false)
-                        }
-                        TextField("", text: $query)
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .font(.system(size: 16))
-                            .foregroundColor(colors.primaryText)
-                            .focused($isSearchFocused)
-                            .disableAutocorrection(true)
-                            .onChange(of: query) { _ in
-                                selectedIndex = 0
-                            }
-                    }
+                // ── Panel ─────────────────────────────────────
+                VStack(spacing: 0) {
+                    Spacer().frame(height: topInset)
 
-                    if !query.isEmpty {
-                        Button(action: {
-                            query = ""
-                            isSearchFocused = true
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(colors.iconColor)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 12)
-                .frame(height: 42)
-                .background(colors.inputBg)
-                .cornerRadius(10)
-                .padding(10)
+                    panel(width: panelW, maxHeight: panelMaxH)
 
-                Divider().background(colors.divider)
-
-
-                // Results
-                if documentManager.workspaceURL == nil {
-                    VStack(spacing: 12) {
-                        Text("Open a folder first.")
-                            .foregroundColor(colors.secondaryText)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if displayResults.isEmpty && !query.isEmpty {
-                    Text("No matching files.")
-                        .foregroundColor(colors.secondaryText)
-                        .font(.system(size: 14))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 2) {
-                                ForEach(Array(displayResults.enumerated()), id: \.element) { index, url in
-                                    resultRow(url: url, index: index)
-                                        .id(url)
-                                        .onTapGesture { openFile(at: url) }
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                        }
-                        .onChange(of: selectedIndex) { idx in
-                            guard idx < displayResults.count else { return }
-                            withAnimation { proxy.scrollTo(displayResults[idx], anchor: .center) }
-                        }
-                    }
+                    Spacer()
                 }
             }
-            .frame(width: 560, height: 440)
-            .background(colors.panelBg)
-            .cornerRadius(14)
-            .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 10)
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(colors.divider, lineWidth: 1))
-            .onAppear {
-                query = ""
-                selectedIndex = 0
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    isSearchFocused = true
-                }
-            }
-            .background(
-                QuickOpenKeyMonitor(
-                    onUp: { move(-1) },
-                    onDown: { move(1) },
-                    onEnter: { openSelected() },
-                    onEscape: { dismiss() }
-                )
+            .frame(width: winW, height: winH)
+        }
+        .onAppear {
+            query = ""
+            selectedIndex = 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { isFocused = true }
+        }
+        .background(
+            QuickOpenKeyMonitor(
+                onUp: { move(-1) },
+                onDown: { move(1) },
+                onEnter: { openSelected() },
+                onEscape: { dismiss() }
             )
+        )
+    }
+
+    // MARK: - Panel Shell
+
+    @ViewBuilder
+    private func panel(width: CGFloat, maxHeight: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            inputBar
+
+            Rectangle()
+                .fill(c.divider)
+                .frame(height: 1)
+
+            resultList
+                .frame(maxHeight: .infinity)
+
+            Rectangle()
+                .fill(c.divider)
+                .frame(height: 1)
+
+            footerBar
+        }
+        .frame(width: width)
+        .frame(maxHeight: maxHeight)
+        .background(c.panelBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(c.panelBorder, lineWidth: 1)
+        )
+        .shadow(color: c.shadow, radius: 48, x: 0, y: 22)
+        // Center horizontally
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Input Bar
+
+    private var inputBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(c.icon)
+
+            ZStack(alignment: .leading) {
+                if query.isEmpty {
+                    Text("Search files by name or path…")
+                        .font(.system(size: 14))
+                        .foregroundColor(c.placeholder)
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $query)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .font(.system(size: 14))
+                    .foregroundColor(c.primary)
+                    .focused($isFocused)
+                    .disableAutocorrection(true)
+                    .onChange(of: query) { _ in selectedIndex = 0 }
+            }
+
+            if !query.isEmpty {
+                Button(action: { query = ""; isFocused = true }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(c.icon.opacity(0.7))
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 48)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(c.inputBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(c.inputBorder, lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Result List
+
+    @ViewBuilder
+    private var resultList: some View {
+        if documentManager.workspaceURL == nil {
+            emptyState(icon: "folder.badge.questionmark",
+                       text: "Open a workspace folder to search files.")
+        } else if results.isEmpty && !query.isEmpty {
+            emptyState(icon: "doc.text.magnifyingglass",
+                       text: "No files matching \"\(query)\"")
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(results.enumerated()), id: \.element) { index, url in
+                            row(url: url, index: index)
+                                .id(url)
+                                .onTapGesture { openFile(at: url) }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                }
+                .onChange(of: selectedIndex) { idx in
+                    guard idx < results.count else { return }
+                    withAnimation(.easeInOut(duration: 0.12)) {
+                        proxy.scrollTo(results[idx], anchor: .center)
+                    }
+                }
+            }
         }
     }
 
-    @ViewBuilder
-    private func resultRow(url: URL, index: Int) -> some View {
-        let selected = index == selectedIndex
-        let rel = documentManager.flatMarkdownEntries.first(where: { $0.url == url })?.relativePath ?? url.lastPathComponent
+    // MARK: - Row
 
-        HStack(spacing: 12) {
-            Image(systemName: "doc.plaintext")
-                .foregroundColor(colors.iconColor)
-                .font(.system(size: 15))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(url.lastPathComponent)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(colors.primaryText)
+    @ViewBuilder
+    private func row(url: URL, index: Int) -> some View {
+        let selected = index == selectedIndex
+        let name = strippedName(url)
+        let rel  = documentManager.flatMarkdownEntries
+            .first(where: { $0.url == url })?.relativePath ?? url.lastPathComponent
+
+        HStack(spacing: 10) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(c.icon)
+                .frame(width: 18, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(c.primary)
+                    .lineLimit(1)
+
                 Text(rel)
-                    .font(.system(size: 12))
-                    .foregroundColor(colors.secondaryText)
+                    .font(.system(size: 11))
+                    .foregroundColor(c.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Spacer()
+
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
-        .frame(height: 54)
-        .background(selected ? colors.resultHoverBg : Color.clear)
-        .cornerRadius(9)
+        .frame(height: 56)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(selected ? c.selectedBg : Color.clear)
+        )
         .contentShape(Rectangle())
+        .help(rel)
     }
 
+    // MARK: - Empty State
+
+    @ViewBuilder
+    private func emptyState(icon: String, text: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .light))
+                .foregroundColor(c.icon.opacity(0.5))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(c.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
+    // MARK: - Footer
+
+    private var footerBar: some View {
+        HStack {
+            Spacer()
+            HStack(spacing: 14) {
+                keyhint(keys: ["↑", "↓"], label: "Navigate")
+                keyhint(keys: ["↵"], label: "Open")
+                keyhint(keys: ["esc"], label: "Close")
+            }
+            .padding(.trailing, 14)
+        }
+        .frame(height: 36)
+        .background(c.panelBg)
+    }
+
+    @ViewBuilder
+    private func keyhint(keys: [String], label: String) -> some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 3) {
+                ForEach(keys, id: \.self) { k in
+                    Text(k)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(c.footer)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(c.keycapBg)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .stroke(c.keycapBorder, lineWidth: 1)
+                                )
+                        )
+                }
+            }
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(c.footer)
+        }
+    }
+
+    // MARK: - Actions
+
     private func move(_ offset: Int) {
-        guard !displayResults.isEmpty else { return }
+        guard !results.isEmpty else { return }
         var next = selectedIndex + offset
-        if next < 0 { next = displayResults.count - 1 }
-        else if next >= displayResults.count { next = 0 }
+        if next < 0 { next = results.count - 1 }
+        else if next >= results.count { next = 0 }
         selectedIndex = next
     }
 
     private func openSelected() {
-        guard !displayResults.isEmpty, selectedIndex < displayResults.count else { return }
-        openFile(at: displayResults[selectedIndex])
+        guard !results.isEmpty, selectedIndex < results.count else { return }
+        openFile(at: results[selectedIndex])
     }
 
     private func openFile(at url: URL) {
