@@ -19,6 +19,7 @@ class DocumentManager: ObservableObject {
     @Published var expandedFolders: Set<URL> = []
     
     private var fileWatcher: FileWatcher?
+    private var workspaceWatcher: WorkspaceWatcher?
     
     // Scroll state
     private var savedScrollPositions: [String: ScrollEntry] = [:]
@@ -53,16 +54,28 @@ class DocumentManager: ObservableObject {
     func openWorkspace(at url: URL) {
         let accessing = url.startAccessingSecurityScopedResource()
         defer {
-            if accessing {
-                url.stopAccessingSecurityScopedResource()
-            }
+            if accessing { url.stopAccessingSecurityScopedResource() }
         }
-        
+
         DispatchQueue.main.async {
             self.workspaceURL = url
             UserDefaults.standard.set(url.absoluteString, forKey: "lastWorkspaceURL")
         }
-        
+
+        // Start recursive FSEvents watcher for the workspace
+        workspaceWatcher?.stop()
+        workspaceWatcher = WorkspaceWatcher(path: url.path) { [weak self] in
+            guard let self = self, let wsURL = self.workspaceURL else { return }
+            // Lightweight rescan — only rebuilds file index, does not touch UI expansion state
+            FileScanner.shared.scan(workspaceURL: wsURL) { nodes in
+                DispatchQueue.main.async {
+                    self.fileNodes = nodes
+                    self.updateFlatMarkdownFiles(nodes: nodes)
+                }
+            }
+        }
+        workspaceWatcher?.start()
+
         FileScanner.shared.scan(workspaceURL: url) { [weak self] nodes in
             DispatchQueue.main.async {
                 self?.fileNodes = nodes
