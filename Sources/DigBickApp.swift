@@ -41,16 +41,49 @@ struct DigBickApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Open...") {
+                Button("Open…") {
                     openFilePanel()
                 }
                 .keyboardShortcut("o", modifiers: [.command])
-                
-                Button("Open Folder...") {
+
+                Button("Open Folder…") {
                     openFolderPanel()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Menu("Open Recent") {
+                    let recents = RecentsManager.shared
+                    if recents.workspaces.isEmpty && recents.files.isEmpty {
+                        Text("No Recent Items")
+                            .foregroundColor(.secondary)
+                    } else {
+                        if !recents.workspaces.isEmpty {
+                            Section("Workspaces") {
+                                ForEach(recents.workspaces) { entry in
+                                    Button(entry.displayName) {
+                                        documentManager.openWorkspace(at: entry.url)
+                                        appState.showFileSidebar = true
+                                    }
+                                }
+                            }
+                        }
+                        if !recents.files.isEmpty {
+                            Section("Files") {
+                                ForEach(recents.files) { entry in
+                                    Button(entry.displayName) {
+                                        documentManager.openFile(at: entry.url)
+                                    }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button("Clear Recents") {
+                            RecentsManager.shared.clearAll()
+                        }
+                    }
+                }
             }
+
             CommandGroup(after: .newItem) {
                 Divider()
                 Button("Quick Open...") {

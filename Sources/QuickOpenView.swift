@@ -45,6 +45,7 @@ struct QuickOpenView: View {
     @FocusState private var isFocused: Bool
 
     var c: QuickOpenColors { QuickOpenColors(scheme: colorScheme) }
+    @ObservedObject private var recents = RecentsManager.shared
 
     // MARK: Filter
 
@@ -62,6 +63,15 @@ struct QuickOpenView: View {
                 .filter { $0.lastPathComponent.lowercased().contains(q) }
                 .sorted { $0.lastPathComponent < $1.lastPathComponent }
         }
+    }
+
+    /// Combined recent URLs (workspace then file) for the empty-query header.
+    private var recentURLs: [URL] {
+        let ws = recents.workspaces.map { $0.url }
+        let fi = recents.files.map { $0.url }
+        // Merge, deduplicate, cap at 5
+        var seen = Set<URL>()
+        return (ws + fi).filter { seen.insert($0).inserted }.prefix(5).map { $0 }
     }
 
     // MARK: Body
@@ -193,7 +203,8 @@ struct QuickOpenView: View {
 
     @ViewBuilder
     private var resultList: some View {
-        if documentManager.workspaceURL == nil {
+        if documentManager.workspaceURL == nil && results.isEmpty && query.isEmpty {
+            // No workspace, no recents — show welcome prompt
             emptyState(icon: "folder.badge.questionmark",
                        text: "Open a workspace folder to search files.")
         } else if results.isEmpty && !query.isEmpty {
@@ -202,9 +213,22 @@ struct QuickOpenView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: 2, pinnedViews: []) {
+                        // ── Recents header (empty query only) ──────────
+                        if query.isEmpty && !recentURLs.isEmpty {
+                            sectionHeader("Recent")
+                            ForEach(Array(recentURLs.enumerated()), id: \.element) { index, url in
+                                recentRow(url: url, index: index)
+                                    .id("recent-\(url)")
+                                    .onTapGesture { openRecent(url: url) }
+                            }
+                            sectionHeader("All Files")
+                        }
+
+                        // ── Main results ────────────────────────────────
+                        let offset = (query.isEmpty && !recentURLs.isEmpty) ? recentURLs.count : 0
                         ForEach(Array(results.enumerated()), id: \.element) { index, url in
-                            row(url: url, index: index)
+                            row(url: url, index: index + offset)
                                 .id(url)
                                 .onTapGesture { openFile(at: url) }
                         }
@@ -220,6 +244,75 @@ struct QuickOpenView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ label: String) -> some View {
+        Text(label.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(c.secondary.opacity(0.7))
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func recentRow(url: URL, index: Int) -> some View {
+        let isWorkspace = recents.workspaces.contains(where: { $0.url == url })
+        let name = isWorkspace ? url.lastPathComponent : strippedName(url)
+        let sub  = isWorkspace ? url.path : (recents.files.first(where: { $0.url == url })?.path ?? url.path)
+
+        HStack(spacing: 10) {
+            Image(systemName: isWorkspace ? "folder" : "doc.text")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(c.icon)
+                .frame(width: 18, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(c.primary)
+                    .lineLimit(1)
+
+                Text(sub)
+                    .font(.system(size: 11))
+                    .foregroundColor(c.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 0)
+
+            Text(isWorkspace ? "workspace" : "file")
+                .font(.system(size: 10))
+                .foregroundColor(c.secondary.opacity(0.6))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(c.keycapBg)
+                )
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 52)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.clear)
+        )
+        .contentShape(Rectangle())
+        .help(sub)
+    }
+
+    private func openRecent(url: URL) {
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+            documentManager.openWorkspace(at: url)
+            appState.showFileSidebar = true
+        } else {
+            documentManager.openFile(at: url)
+        }
+        dismiss()
     }
 
     // MARK: - Row

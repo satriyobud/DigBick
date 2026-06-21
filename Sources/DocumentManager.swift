@@ -60,13 +60,13 @@ class DocumentManager: ObservableObject {
         DispatchQueue.main.async {
             self.workspaceURL = url
             UserDefaults.standard.set(url.absoluteString, forKey: "lastWorkspaceURL")
+            RecentsManager.shared.addWorkspace(url)
         }
 
         // Start recursive FSEvents watcher for the workspace
         workspaceWatcher?.stop()
         workspaceWatcher = WorkspaceWatcher(path: url.path) { [weak self] in
             guard let self = self, let wsURL = self.workspaceURL else { return }
-            // Lightweight rescan — only rebuilds file index, does not touch UI expansion state
             FileScanner.shared.scan(workspaceURL: wsURL) { nodes in
                 DispatchQueue.main.async {
                     self.fileNodes = nodes
@@ -144,14 +144,18 @@ class DocumentManager: ObservableObject {
             DispatchQueue.main.async {
                 self.wordCount = words
                 self.readingTime = time
-                self.tocHeadings.removeAll() // Clear TOC immediately
-                self.currentScrollY = nil // Reset current scroll for new file
+                self.tocHeadings.removeAll()
+                self.currentScrollY = nil
                 self.currentURL = url
                 self.baseURL = url.deletingLastPathComponent()
                 self.error = nil
                 self.render(markdown: text)
                 self.setupWatcher(for: url)
                 UserDefaults.standard.set(url.absoluteString, forKey: "lastFileURL")
+                // Track standalone files only (not files opened from within a workspace)
+                if self.workspaceURL == nil {
+                    RecentsManager.shared.addFile(url)
+                }
             }
         } catch {
             DispatchQueue.main.async {

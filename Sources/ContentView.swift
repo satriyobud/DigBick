@@ -117,18 +117,21 @@ struct ContentView: View {
                                 .padding(.trailing, 20)
                             }
                         } else {
-                            VStack(spacing: 16) {
-                                Text("DigBick")
-                                    .font(.largeTitle)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(colors.sidebarPrimary)
-                                
-                                Text(documentManager.error ?? "Drop a Markdown file or folder here")
-                                    .foregroundColor(colors.sidebarSecondary)
-                                    .multilineTextAlignment(.center)
+                            if let errMsg = documentManager.error {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(colors.sidebarSecondary)
+                                    Text(errMsg)
+                                        .foregroundColor(colors.sidebarSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else {
+                                WelcomeView()
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
+
                     }
                     .frame(minWidth: 400, idealWidth: 860, maxWidth: .infinity, minHeight: 300, idealHeight: 600, maxHeight: .infinity)
                     
