@@ -94,18 +94,25 @@ struct DigBickApp: App {
                     }
                 }
                 .keyboardShortcut("p", modifiers: .command)
-                
+
                 Button("Reload Current File") {
                     documentManager.reload()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                
+
+                Button("Close File") {
+                    documentManager.closeFile()
+                }
+                .keyboardShortcut("w", modifiers: [.command])
+                .disabled(documentManager.currentURL == nil)
+
                 Button("Open in External Editor") {
                     documentManager.openInExternalEditor()
                 }
                 .keyboardShortcut("e", modifiers: [.command])
                 .disabled(documentManager.currentURL == nil)
             }
+
             CommandMenu("View") {
                 Button(appState.showFileSidebar ? "Hide Sidebar" : "Show Sidebar") {
                     appState.showFileSidebar.toggle()
