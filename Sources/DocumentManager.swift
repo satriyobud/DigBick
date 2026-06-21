@@ -27,30 +27,9 @@ class DocumentManager: ObservableObject {
     
     init() {
         loadScrollPositions()
-        restoreLastSession()
     }
     
-    private func restoreLastSession() {
-        if let workspacePath = UserDefaults.standard.string(forKey: "lastWorkspaceURL"),
-           let url = URL(string: workspacePath) {
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                openWorkspace(at: url)
-            } else {
-                UserDefaults.standard.removeObject(forKey: "lastWorkspaceURL")
-            }
-        }
-        
-        if let filePath = UserDefaults.standard.string(forKey: "lastFileURL"),
-           let url = URL(string: filePath) {
-            if FileManager.default.fileExists(atPath: url.path) {
-                openFile(at: url)
-            } else {
-                UserDefaults.standard.removeObject(forKey: "lastFileURL")
-            }
-        }
-    }
-    
+
     func openWorkspace(at url: URL) {
         let accessing = url.startAccessingSecurityScopedResource()
         defer {
