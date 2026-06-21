@@ -37,9 +37,6 @@ struct WebView: NSViewRepresentable {
         config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
         // Non-persistent store: no disk cache, limits in-memory WebKit storage
         config.websiteDataStore = WKWebsiteDataStore.nonPersistent()
-        // Disable back/forward page cache — we never navigate back, no need to
-        // keep old rendered documents in memory
-        config.preferences.setValue(false, forKey: "backForwardCacheEnabled")
 
         let weakHandler = WeakScriptMessageHandler(context.coordinator)
         config.userContentController.add(weakHandler, name: "digbickTOC")
