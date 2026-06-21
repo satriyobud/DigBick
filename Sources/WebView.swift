@@ -31,31 +31,38 @@ struct WebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let prefs = WKPreferences()
         prefs.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        
+
         let config = WKWebViewConfiguration()
         config.preferences = prefs
         config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
-        
+        // Non-persistent store: no disk cache, limits in-memory WebKit storage
+        config.websiteDataStore = WKWebsiteDataStore.nonPersistent()
+        // Disable back/forward page cache — we never navigate back, no need to
+        // keep old rendered documents in memory
+        config.preferences.setValue(false, forKey: "backForwardCacheEnabled")
+
         let weakHandler = WeakScriptMessageHandler(context.coordinator)
         config.userContentController.add(weakHandler, name: "digbickTOC")
         config.userContentController.add(weakHandler, name: "digbickHeading")
         config.userContentController.add(weakHandler, name: "digbickScroll")
         config.userContentController.add(weakHandler, name: "digbickFindResults")
-        
+
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
-        webView.allowsMagnification = true
-        
+        webView.allowsMagnification = false
+        webView.allowsBackForwardNavigationGestures = false
         webView.setValue(false, forKey: "drawsBackground")
-        
+
         return webView
     }
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        if context.coordinator.lastLoadedContent != htmlContent {
+        // Use hash comparison — avoids keeping a full HTML string copy in the coordinator
+        let newHash = htmlContent.hashValue
+        if context.coordinator.lastLoadedContentHash != newHash {
+            context.coordinator.lastLoadedContentHash = newHash
             context.coordinator.didRestoreScroll = false
             nsView.loadHTMLString(htmlContent, baseURL: baseURL)
-            context.coordinator.lastLoadedContent = htmlContent
         }
         
         let queryChanged = context.coordinator.lastSearchText != searchText
@@ -97,7 +104,8 @@ struct WebView: NSViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebView
-        var lastLoadedContent: String?
+        // Hash-based comparison — no full HTML copy stored here
+        var lastLoadedContentHash: Int = 0
         var lastSearchText: String?
         var lastIsSearching: Bool?
         var didRestoreScroll = false

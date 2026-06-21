@@ -28,7 +28,24 @@ class DocumentManager: ObservableObject {
     init() {
         loadScrollPositions()
     }
-    
+
+    /// Release the current document from memory (HTML content + base URL).
+    /// Called when returning to the Welcome screen.
+    func closeFile() {
+        if let url = currentURL, let y = currentScrollY {
+            saveScrollPosition(y: y, for: url)
+        }
+        currentURL    = nil
+        content       = nil
+        baseURL       = nil
+        error         = nil
+        wordCount     = 0
+        readingTime   = 0
+        currentScrollY = nil
+        tocHeadings.removeAll()
+        fileWatcher?.stop()
+        fileWatcher = nil
+    }
 
     func openWorkspace(at url: URL) {
         let accessing = url.startAccessingSecurityScopedResource()
