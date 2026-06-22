@@ -147,20 +147,20 @@ struct ContentView: View {
                                 .padding(.top, 10)
                                 .padding(.trailing, 20)
                             }
-                        } else {
-                            if let errMsg = documentManager.error {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(colors.sidebarSecondary)
-                                    Text(errMsg)
-                                        .foregroundColor(colors.sidebarSecondary)
-                                        .multilineTextAlignment(.center)
-                                }
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            } else {
-                                WelcomeView()
+                        } else if let errMsg = documentManager.error {
+                            VStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(colors.sidebarSecondary)
+                                Text(errMsg)
+                                    .foregroundColor(colors.sidebarSecondary)
+                                    .multilineTextAlignment(.center)
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if documentManager.workspaceURL == nil && documentManager.currentURL == nil {
+                            WelcomeView()
+                        } else {
+                            Color.clear
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -280,6 +280,7 @@ struct ContentView: View {
         }
         .onChange(of: documentManager.workspaceURL) { newURL in
             if newURL != nil {
+                appState.showFileSidebar = true
                 isFirstScanAfterWorkspaceOpen = true
             }
         }

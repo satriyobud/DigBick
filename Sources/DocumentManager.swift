@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UniformTypeIdentifiers
 
 class DocumentManager: ObservableObject {
     @Published var currentURL: URL?
@@ -241,4 +242,65 @@ class DocumentManager: ObservableObject {
         let key = url.standardizedFileURL.path
         return savedScrollPositions[key]?.y
     }
+    
+    // MARK: - Recent Workspaces Support
+    
+    var recentWorkspaces: [URL] {
+        RecentsManager.shared.workspaces.map { $0.url }
+    }
+    
+    func loadRecentWorkspaces() {
+        // RecentsManager handles loading automatically on initialization
+    }
+    
+    func saveRecentWorkspaces() {
+        // RecentsManager handles saving automatically on changes
+    }
+    
+    func addRecentWorkspace(_ url: URL) {
+        RecentsManager.shared.addWorkspace(url)
+    }
+    
+    func removeRecentWorkspace(_ url: URL) {
+        RecentsManager.shared.removeWorkspace(url)
+    }
+    
+    func openRecentWorkspace(_ url: URL) {
+        let standardURL = url.standardizedFileURL
+        if FileManager.default.fileExists(atPath: standardURL.path) {
+            openWorkspace(at: standardURL)
+        } else {
+            NotificationCenter.default.post(name: NSNotification.Name("DigBickShowToast"), object: "Recent folder not found")
+            removeRecentWorkspace(standardURL)
+        }
+    }
+    
+    func selectAndOpenWorkspace() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            openWorkspace(at: url)
+        }
+    }
+    
+    func selectAndOpenFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        
+        var allowedTypes: [UTType] = [.plainText]
+        if let md = UTType(filenameExtension: "md") { allowedTypes.append(md) }
+        if let markdown = UTType(filenameExtension: "markdown") { allowedTypes.append(markdown) }
+        if let mdown = UTType(filenameExtension: "mdown") { allowedTypes.append(mdown) }
+        panel.allowedContentTypes = allowedTypes
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            openFile(at: url)
+        }
+    }
 }
+

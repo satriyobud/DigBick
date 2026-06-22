@@ -25,7 +25,8 @@ struct RecentEntry: Codable, Identifiable, Equatable {
 class RecentsManager: ObservableObject {
     static let shared = RecentsManager()
 
-    private let maxItems = 8
+    // TODO: Use security-scoped bookmarks if DigBick becomes sandboxed.
+    private let maxItems = 10
     private let workspacesKey = "recentWorkspaces"
     private let filesKey      = "recentFiles"
 
@@ -43,6 +44,12 @@ class RecentsManager: ObservableObject {
 
     func addFile(_ url: URL) {
         files = prepend(RecentEntry(url: url), to: files)
+        save()
+    }
+
+    func removeWorkspace(_ url: URL) {
+        let path = url.standardizedFileURL.path
+        workspaces.removeAll { $0.path == path }
         save()
     }
 

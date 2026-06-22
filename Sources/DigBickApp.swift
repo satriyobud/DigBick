@@ -18,7 +18,6 @@ struct DigBickApp: App {
                                     var isDir: ObjCBool = false
                                     if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
                                         documentManager.openWorkspace(at: url)
-                                        appState.showFileSidebar = true
                                     } else {
                                         documentManager.openFile(at: url)
                                     }
@@ -33,7 +32,6 @@ struct DigBickApp: App {
                     var isDir: ObjCBool = false
                     if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
                         documentManager.openWorkspace(at: url)
-                        appState.showFileSidebar = true
                     } else {
                         documentManager.openFile(at: url)
                     }
@@ -42,12 +40,12 @@ struct DigBickApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open…") {
-                    openFilePanel()
+                    documentManager.selectAndOpenFile()
                 }
                 .keyboardShortcut("o", modifiers: [.command])
 
                 Button("Open Folder…") {
-                    openFolderPanel()
+                    documentManager.selectAndOpenWorkspace()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
@@ -141,27 +139,4 @@ struct DigBickApp: App {
         }
     }
     
-    private func openFilePanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.plainText] // UTTypes for md, txt, markdown
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            documentManager.openFile(at: url)
-        }
-    }
-    
-    private func openFolderPanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            documentManager.openWorkspace(at: url)
-            appState.showFileSidebar = true
-        }
-    }
 }
