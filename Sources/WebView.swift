@@ -43,6 +43,7 @@ struct WebView: NSViewRepresentable {
         config.userContentController.add(weakHandler, name: "digbickHeading")
         config.userContentController.add(weakHandler, name: "digbickScroll")
         config.userContentController.add(weakHandler, name: "digbickFindResults")
+        config.userContentController.add(weakHandler, name: "digbickCopy")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -93,6 +94,7 @@ struct WebView: NSViewRepresentable {
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickHeading")
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickScroll")
         nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickFindResults")
+        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "digbickCopy")
     }
     
     func makeCoordinator() -> Coordinator {
@@ -112,6 +114,7 @@ struct WebView: NSViewRepresentable {
             super.init()
             NotificationCenter.default.addObserver(self, selector: #selector(handleFindNext), name: NSNotification.Name("DigBickFindNext"), object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleFindPrev), name: NSNotification.Name("DigBickFindPrev"), object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleCopyAllText), name: NSNotification.Name("DigBickCopyAllText"), object: nil)
         }
         
         deinit {
@@ -126,6 +129,10 @@ struct WebView: NSViewRepresentable {
         
         @objc func handleFindPrev() {
             webViewInstance?.evaluateJavaScript("window.digbickFindPrevious()")
+        }
+        
+        @objc func handleCopyAllText() {
+            webViewInstance?.evaluateJavaScript("if (window.digbickCopyAllText) window.digbickCopyAllText();")
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -162,6 +169,21 @@ struct WebView: NSViewRepresentable {
             } else if message.name == "digbickFindResults", let dict = message.body as? [String: Int], let total = dict["total"], let current = dict["currentIndex"] {
                 DispatchQueue.main.async {
                     self.parent.onFindResults?(total, current)
+                }
+            } else if message.name == "digbickCopy", let dict = message.body as? [String: String], let type = dict["type"], let content = dict["content"] {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(content, forType: .string)
+                
+                DispatchQueue.main.async {
+                    let notificationName = NSNotification.Name("DigBickShowToast")
+                    let msg: String
+                    if type == "text" { msg = "Copied as Text" }
+                    else if type == "markdown" { msg = "Copied as Markdown" }
+                    else if type == "code" { msg = "Copied code" }
+                    else { msg = "Copied" }
+                    
+                    NotificationCenter.default.post(name: notificationName, object: msg)
                 }
             }
         }

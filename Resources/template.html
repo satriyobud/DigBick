@@ -86,7 +86,104 @@
                 padding: 15px;
             }
         }
+        
+        /* Copy Feature Styles */
+        .digbick-copy-code {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            font-size: 11px;
+            color: var(--dig-text-color);
+            background-color: var(--dig-doc-bg);
+            border: 1px solid var(--dig-code-border);
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        
+        .markdown-body pre {
+            position: relative; /* needed for the absolute copy btn */
+        }
+        
+        .markdown-body pre:hover .digbick-copy-code {
+            opacity: 1;
+        }
+        
+        .digbick-copy-code:hover {
+            background-color: var(--dig-inline-bg);
+        }
+        
+        .digbick-copy-code:active {
+            opacity: 0.7;
+        }
+        
+        .digbick-selection-menu {
+            position: fixed;
+            display: flex;
+            align-items: center;
+            padding: 4px;
+            background-color: var(--dig-doc-bg);
+            border: 1px solid var(--dig-code-border);
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            z-index: 1000;
+            pointer-events: auto;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            transform: translateY(4px);
+        }
+        
+        .digbick-selection-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .digbick-selection-menu {
+                box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            }
+        }
+        
+        .digbick-selection-btn {
+            background: none;
+            border: none;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--dig-text-color);
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+        }
+        
+        .digbick-selection-btn:hover {
+            background-color: var(--dig-inline-bg);
+        }
+        
+        .digbick-selection-divider {
+            width: 1px;
+            height: 16px;
+            background-color: var(--dig-code-border);
+            margin: 0 2px;
+        }
+        
+        /* Prevent selection highlight from stretching to 100% width on multiline text */
+        p.digbick-md-block,
+        h1.digbick-md-block, h2.digbick-md-block, h3.digbick-md-block,
+        h4.digbick-md-block, h5.digbick-md-block, h6.digbick-md-block,
+        li.digbick-md-block {
+            width: fit-content;
+            max-width: 100%;
+        }
     </style>
+
 </head>
 <body>
     <article class="markdown-body" id="content"></article>
@@ -209,8 +306,17 @@
             window.digbickUpdateFindActive();
         };
 
+        window.digbickCopyAllText = function() {
+            const content = document.getElementById('content').innerText;
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickCopy) {
+                window.webkit.messageHandlers.digbickCopy.postMessage({ type: 'text', content: content });
+            }
+        };
+
         document.addEventListener("DOMContentLoaded", () => {
             const markdown = `{{MARKDOWN_CONTENT}}`;
+            window.__digbickRawMarkdown = markdown;
+            window.__digbickBlockMap = new Map();
             
             let headings = [];
             let slugCount = {};
@@ -243,12 +349,192 @@
                 renderer: renderer
             });
             
-            document.getElementById('content').innerHTML = marked.parse(markdown);
+            // Lex and render block by block
+            const tokens = marked.lexer(markdown);
+            let finalHTML = '';
+            
+            const tempContainer = document.createElement('div');
+            
+            tokens.forEach((token, index) => {
+                const blockId = 'block-' + index;
+                window.__digbickBlockMap.set(blockId, token.raw);
+                
+                // We use marked.parser to render an array of one token
+                let html = marked.parser([token]);
+                
+                tempContainer.innerHTML = html;
+                if (tempContainer.children.length > 0) {
+                    for (let i = 0; i < tempContainer.children.length; i++) {
+                        tempContainer.children[i].classList.add('digbick-md-block');
+                        tempContainer.children[i].setAttribute('data-block-id', blockId);
+                    }
+                    finalHTML += tempContainer.innerHTML + '\n';
+                } else if (html.trim() !== '') {
+                    // For bare text nodes
+                    finalHTML += `<span class="digbick-md-block" data-block-id="${blockId}">${html}</span>\n`;
+                }
+            });
+            
+            document.getElementById('content').innerHTML = finalHTML;
             
             // Send headings back to native app
             if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickTOC) {
                 window.webkit.messageHandlers.digbickTOC.postMessage(headings);
             }
+            
+            const checkIcon = `<svg width="14" height="14" style="margin-right:6px; color: #28a745;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            
+            const showSuccess = (btn, originalHTML, callback) => {
+                btn.innerHTML = `${checkIcon}Copied!`;
+                btn.style.color = '#28a745';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.color = '';
+                    if (callback) callback();
+                }, 1000);
+            };
+
+            // Add Copy buttons to code blocks
+            document.querySelectorAll('pre code').forEach((block, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'digbick-copy-code';
+                btn.textContent = 'Copy';
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // prevent selection menu from closing/opening
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickCopy) {
+                        window.webkit.messageHandlers.digbickCopy.postMessage({
+                            type: 'code', 
+                            content: block.textContent || ''
+                        });
+                        showSuccess(btn, 'Copy');
+                    }
+                });
+                if (block.parentElement) {
+                    block.parentElement.style.position = 'relative';
+                    block.parentElement.appendChild(btn);
+                }
+            });
+            
+            // Setup Floating Selection Menu
+            const copyIcon = `<svg width="14" height="14" style="margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+            
+            const menu = document.createElement('div');
+            menu.className = 'digbick-selection-menu';
+            menu.innerHTML = `
+                <button class="digbick-selection-btn" id="btn-copy-text">${copyIcon}Copy as Text</button>
+                <div class="digbick-selection-divider"></div>
+                <button class="digbick-selection-btn" id="btn-copy-md">${copyIcon}Copy as Markdown</button>
+            `;
+            document.body.appendChild(menu);
+            
+            const btnCopyText = document.getElementById('btn-copy-text');
+            const btnCopyMd = document.getElementById('btn-copy-md');
+            
+            let hideMenuTimeout;
+            
+            const hideMenu = () => {
+                menu.classList.remove('show');
+            };
+            
+            document.addEventListener('mousedown', (e) => {
+                if (!menu.contains(e.target)) {
+                    hideMenu();
+                }
+            });
+            
+            window.addEventListener('scroll', () => {
+                hideMenu();
+            }, { passive: true });
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    hideMenu();
+                    window.getSelection().removeAllRanges();
+                }
+            });
+            
+            document.addEventListener('selectionchange', () => {
+                clearTimeout(hideMenuTimeout);
+                
+                const selection = window.getSelection();
+                if (!selection || selection.isCollapsed || selection.toString().trim() === '') {
+                    hideMenu();
+                    return;
+                }
+                
+                // Debounce showing the menu slightly
+                hideMenuTimeout = setTimeout(() => {
+                    const range = selection.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+                    
+                    // Show menu above selection
+                    menu.classList.add('show');
+                    
+                    // Calculate position
+                    const menuRect = menu.getBoundingClientRect();
+                    let top = rect.top - menuRect.height - 8;
+                    let left = rect.left + (rect.width / 2) - (menuRect.width / 2);
+                    
+                    // Keep within viewport bounds
+                    if (top < 10) top = rect.bottom + 8; // flip below if no room above
+                    if (left < 10) left = 10;
+                    if (left + menuRect.width > window.innerWidth - 10) left = window.innerWidth - menuRect.width - 10;
+                    
+                    menu.style.top = `${top}px`;
+                    menu.style.left = `${left}px`;
+                }, 100);
+            });
+            
+            btnCopyText.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed) {
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickCopy) {
+                        window.webkit.messageHandlers.digbickCopy.postMessage({
+                            type: 'text',
+                            content: selection.toString()
+                        });
+                    }
+                    showSuccess(btnCopyText, `${copyIcon}Copy as Text`, () => {
+                        hideMenu();
+                        selection.removeAllRanges();
+                    });
+                }
+            });
+            
+            btnCopyMd.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed) {
+                    // Find nearest ancestor block
+                    let node = selection.anchorNode;
+                    if (node.nodeType === 3) node = node.parentNode; // Get element if text node
+                    
+                    let blockElement = node.closest('.digbick-md-block');
+                    if (blockElement) {
+                        const blockId = blockElement.getAttribute('data-block-id');
+                        const rawMd = window.__digbickBlockMap.get(blockId);
+                        if (rawMd && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickCopy) {
+                            window.webkit.messageHandlers.digbickCopy.postMessage({
+                                type: 'markdown',
+                                content: rawMd
+                            });
+                        }
+                    } else {
+                        // Fallback to text if block not found
+                        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.digbickCopy) {
+                            window.webkit.messageHandlers.digbickCopy.postMessage({
+                                type: 'text',
+                                content: selection.toString()
+                            });
+                        }
+                    }
+                    showSuccess(btnCopyMd, `${copyIcon}Copy as Markdown`, () => {
+                        hideMenu();
+                        selection.removeAllRanges();
+                    });
+                }
+            });
             
             // Throttled Scroll Tracker for Heading Highlight
             let headingTimeout;
