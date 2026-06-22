@@ -4,6 +4,7 @@ import AppKit
 class DocumentManager: ObservableObject {
     @Published var currentURL: URL?
     @Published var content: String?
+    @Published var rawMarkdown: String?
     @Published var baseURL: URL?
     @Published var error: String?
     
@@ -37,6 +38,7 @@ class DocumentManager: ObservableObject {
         }
         currentURL    = nil
         content       = nil
+        rawMarkdown   = nil
         baseURL       = nil
         error         = nil
         wordCount     = 0
@@ -145,6 +147,7 @@ class DocumentManager: ObservableObject {
                 self.currentURL = url
                 self.baseURL = url.deletingLastPathComponent()
                 self.error = nil
+                self.rawMarkdown = text
                 self.render(markdown: text)
                 self.setupWatcher(for: url)
                 UserDefaults.standard.set(url.absoluteString, forKey: "lastFileURL")

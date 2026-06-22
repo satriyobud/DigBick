@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 extension Color {
     init(hex: String) {
@@ -52,6 +53,8 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     
     @State private var scrollToHeading: String? = nil
+    @State private var dragStartWidth: CGFloat = 280
+    @State private var isFirstScanAfterWorkspaceOpen: Bool = false
 
     var colors: AppColors { AppColors(scheme: colorScheme) }
 
@@ -62,11 +65,39 @@ struct ContentView: View {
                     .fill(colors.divider)
                     .frame(height: 1)
                     
-                HSplitView {
+                HStack(spacing: 0) {
                     // Left File Sidebar
                     if !appState.isReadingMode && appState.showFileSidebar && documentManager.workspaceURL != nil {
                         FileSidebarView(nodes: documentManager.fileNodes)
-                            .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
+                            .frame(width: appState.sidebarWidth)
+                        
+                        // Draggable Divider
+                        Rectangle()
+                            .fill(colors.divider)
+                            .frame(width: 1)
+                            .overlay(
+                                Color.clear
+                                    .frame(width: 8)
+                                    .contentShape(Rectangle())
+                            )
+                            .onHover { isHovered in
+                                if isHovered {
+                                    NSCursor.resizeLeftRight.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { gesture in
+                                        if gesture.translation == .zero {
+                                            dragStartWidth = appState.sidebarWidth
+                                        }
+                                        let newWidth = dragStartWidth + gesture.translation.width
+                                        appState.sidebarWidth = Swift.max(220, Swift.min(480, newWidth))
+                                        appState.hasUserResizedSidebar = true
+                                    }
+                            )
                     }
                     
                     // Main Content
@@ -97,7 +128,7 @@ struct ContentView: View {
                             )
                             .edgesIgnoringSafeArea(.all)
                             
-                        if appState.isFindBarVisible {
+                            if appState.isFindBarVisible {
                                 FindBarView(
                                     onFind: { _ in
                                         // The WebView already observes $appState.findQuery
@@ -131,16 +162,19 @@ struct ContentView: View {
                                 WelcomeView()
                             }
                         }
-
                     }
-                    .frame(minWidth: 400, idealWidth: 860, maxWidth: .infinity, minHeight: 300, idealHeight: 600, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     
                     // Right TOC Sidebar
                     if !appState.isReadingMode && appState.showTOCSidebar && documentManager.currentURL != nil {
+                        Rectangle()
+                            .fill(colors.divider)
+                            .frame(width: 1)
+                        
                         TOCSidebarView(headings: documentManager.tocHeadings, onSelect: { id in
                             scrollToHeading = id
                         })
-                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 340)
+                        .frame(width: 260)
                     }
                 }
             }
@@ -152,6 +186,26 @@ struct ContentView: View {
                         Image(systemName: "sidebar.left")
                     }
                     .help("Toggle File Sidebar")
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Copy all as Text") {
+                            NotificationCenter.default.post(name: NSNotification.Name("DigBickCopyAllText"), object: nil)
+                        }
+                        Button("Copy all as Markdown") {
+                            if let raw = documentManager.rawMarkdown {
+                                let pb = NSPasteboard.general
+                                pb.clearContents()
+                                pb.setString(raw, forType: .string)
+                                appState.copyToast = "Copied as Markdown"
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .disabled(documentManager.currentURL == nil)
+                    .help("Copy document")
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
@@ -197,7 +251,80 @@ struct ContentView: View {
             }
             .keyboardShortcut("g", modifiers: [.command, .shift])
             .opacity(0)
+            
+            // Toast Notification Overlay
+            if let msg = appState.copyToast {
+                VStack {
+                    Spacer()
+                    CopyToastView(message: msg)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                .edgesIgnoringSafeArea(.bottom)
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            if appState.copyToast == msg {
+                                appState.copyToast = nil
+                            }
+                        }
+                    }
+                }
+            }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DigBickShowToast"))) { notif in
+            if let msg = notif.object as? String {
+                withAnimation {
+                    appState.copyToast = msg
+                }
+            }
+        }
+        .onChange(of: documentManager.workspaceURL) { newURL in
+            if newURL != nil {
+                isFirstScanAfterWorkspaceOpen = true
+            }
+        }
+        .onChange(of: documentManager.flatMarkdownFiles) { newFiles in
+            if isFirstScanAfterWorkspaceOpen && !newFiles.isEmpty {
+                isFirstScanAfterWorkspaceOpen = false
+                if !appState.hasUserResizedSidebar {
+                    performAutoFit()
+                }
+            }
+        }
+    }
+
+    private func getVisibleNodesAndLevels(nodes: [FileNode], level: Int, expandedFolders: Set<URL>) -> [(node: FileNode, level: Int)] {
+        var result: [(node: FileNode, level: Int)] = []
+        for node in nodes {
+            result.append((node, level))
+            if node.isDirectory && expandedFolders.contains(node.url) {
+                if let children = node.children {
+                    result.append(contentsOf: getVisibleNodesAndLevels(nodes: children, level: level + 1, expandedFolders: expandedFolders))
+                }
+            }
+        }
+        return result
+    }
+
+    private func estimateTextWidth(text: String, isSelected: Bool) -> CGFloat {
+        let font = isSelected ? NSFont.systemFont(ofSize: 13, weight: .semibold) : NSFont.systemFont(ofSize: 13)
+        let attributes = [NSAttributedString.Key.font: font]
+        return (text as NSString).size(withAttributes: attributes).width
+    }
+
+    private func performAutoFit() {
+        let visibleNodes = getVisibleNodesAndLevels(nodes: documentManager.fileNodes, level: 0, expandedFolders: documentManager.expandedFolders)
+        var maxRowWidth: CGFloat = 220
+        for (node, level) in visibleNodes {
+            let isSelected = node.url == documentManager.currentURL
+            let textWidth = estimateTextWidth(text: node.url.lastPathComponent, isSelected: isSelected)
+            let rowWidth = 98 + CGFloat(level * 14) + textWidth
+            if rowWidth > maxRowWidth {
+                maxRowWidth = rowWidth
+            }
+        }
+        
+        appState.sidebarWidth = Swift.max(220, Swift.min(380, maxRowWidth))
     }
 }
 
@@ -229,7 +356,7 @@ struct FileSidebarView: View {
             
             Divider().background(colors.divider)
             
-            ScrollView {
+            ScrollView(showsIndicators: true) {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(nodes) { node in
                         FileNodeRow(node: node, level: 0)
@@ -308,6 +435,7 @@ struct FileNodeRow: View {
                         .foregroundColor(isSelected ? colors.selectedText : colors.sidebarPrimary)
                         .fontWeight(isSelected ? .semibold : .regular)
                         .lineLimit(1)
+                        .help(node.url.lastPathComponent)
                     
                     Spacer()
                 }
