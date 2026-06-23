@@ -2,6 +2,8 @@
 
 A fast, beautiful Markdown viewer for macOS.
 
+DigBick aims to stay viewer-only, local-first, lightweight, and native-feeling.
+
 ![DigBick Screenshot](screenshot.png)
 
 ## What it is
@@ -92,6 +94,18 @@ DigBick is, and always will be, completely free and open-source.
 If you find it useful, you can buy me a coffee!
 
 [![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-00457C.svg?style=for-the-badge&logo=paypal)](https://paypal.me/satriyobud)
+
+---
+
+## Contributing
+
+Contributions are welcome.
+
+If you want to help, check the open issues. Issues labeled `good first issue` are a good place to start.
+
+For larger changes, please open an issue first so we can discuss the direction before implementation.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup instructions and contribution guidelines.
 
 ---
 
