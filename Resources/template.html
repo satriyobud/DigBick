@@ -182,6 +182,40 @@
             width: fit-content;
             max-width: 100%;
         }
+
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+            }
+
+            .digbick-selection-menu,
+            .digbick-copy-code {
+                display: none !important;
+            }
+
+            .markdown-body {
+                max-width: none !important;
+                padding: 0 !important;
+                color: black !important;
+            }
+
+            a {
+                color: inherit !important;
+                text-decoration: underline !important;
+            }
+
+            pre,
+            code {
+                page-break-inside: avoid;
+            }
+
+            img {
+                max-width: 100% !important;
+                page-break-inside: avoid;
+            }
+        }
     </style>
 
 </head>

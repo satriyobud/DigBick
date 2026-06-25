@@ -82,6 +82,13 @@ struct DigBickApp: App {
                 }
             }
 
+            CommandGroup(replacing: .printItem) {
+                Button("Print…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("DigBickPrint"), object: nil)
+                }
+                .disabled(documentManager.currentURL == nil)
+            }
+
             CommandGroup(after: .newItem) {
                 Divider()
                 Button("Quick Open...") {
