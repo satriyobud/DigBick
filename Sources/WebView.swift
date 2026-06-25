@@ -115,6 +115,7 @@ struct WebView: NSViewRepresentable {
             NotificationCenter.default.addObserver(self, selector: #selector(handleFindNext), name: NSNotification.Name("DigBickFindNext"), object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleFindPrev), name: NSNotification.Name("DigBickFindPrev"), object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleCopyAllText), name: NSNotification.Name("DigBickCopyAllText"), object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handlePrint), name: NSNotification.Name("DigBickPrint"), object: nil)
         }
         
         deinit {
@@ -133,6 +134,21 @@ struct WebView: NSViewRepresentable {
         
         @objc func handleCopyAllText() {
             webViewInstance?.evaluateJavaScript("if (window.digbickCopyAllText) window.digbickCopyAllText();")
+        }
+        
+        @objc func handlePrint() {
+            guard let webView = webViewInstance,
+                  let window = webView.window,
+                  window.isKeyWindow else { return }
+            
+            DispatchQueue.main.async {
+                let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+                printInfo.horizontalPagination = .clip
+                printInfo.verticalPagination = .automatic
+                
+                let printOperation = webView.printOperation(with: printInfo)
+                printOperation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+            }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
