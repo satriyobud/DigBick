@@ -18,7 +18,7 @@
         }
 
         @media (prefers-color-scheme: dark) {
-            :root {
+            :root:not([data-theme="light"]) {
                 --dig-doc-bg: #161719;
                 --dig-link-color: #6EA8FF;
                 --dig-inline-bg: #25272B;
@@ -26,6 +26,26 @@
                 --dig-code-border: #34363B;
                 --dig-text-color: #c9d1d9;
             }
+        }
+
+        :root[data-theme="dark"] {
+            --dig-doc-bg: #161719;
+            --dig-link-color: #6EA8FF;
+            --dig-inline-bg: #25272B;
+            --dig-code-bg: #1F2125;
+            --dig-code-border: #34363B;
+            --dig-text-color: #c9d1d9;
+            color-scheme: dark;
+        }
+
+        :root[data-theme="light"] {
+            --dig-doc-bg: #FEFEFE;
+            --dig-link-color: #286BC3;
+            --dig-inline-bg: #EEF0F2;
+            --dig-code-bg: #F7F8FA;
+            --dig-code-border: #D9DEE5;
+            --dig-text-color: #1F2328;
+            color-scheme: light;
         }
 
         body {
@@ -627,6 +647,14 @@
                     }
                 }, 10);
             });
+        };
+
+        window.digbickSetTheme = function(theme) {
+            if (theme === 'dark' || theme === 'light') {
+                document.documentElement.setAttribute('data-theme', theme);
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
         };
     </script>
 </body>
