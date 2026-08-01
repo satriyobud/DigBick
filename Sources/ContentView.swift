@@ -108,6 +108,7 @@ struct ContentView: View {
                             WebView(
                                 htmlContent: content,
                                 baseURL: baseURL,
+                                theme: appState.appTheme,
                                 searchText: $appState.findQuery,
                                 isSearching: $appState.isFindBarVisible,
                                 scrollToHeading: $scrollToHeading,
@@ -179,6 +180,7 @@ struct ContentView: View {
                 }
             }
             .background(colors.appBg)
+            .preferredColorScheme(appState.appTheme.colorScheme)
             .navigationTitle(documentManager.currentURL != nil ? "DigBick — \(documentManager.currentURL!.lastPathComponent)" : "DigBick")
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -186,6 +188,21 @@ struct ContentView: View {
                         Image(systemName: "sidebar.left")
                     }
                     .help("Toggle File Sidebar")
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Picker("Theme", selection: $appState.appTheme) {
+                            ForEach(AppTheme.allCases) { themeOption in
+                                Label(themeOption.displayName, systemImage: themeOption.iconName)
+                                    .tag(themeOption)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Image(systemName: appState.appTheme.iconName)
+                    }
+                    .help("Theme (System, Light, Dark)")
                 }
                 
                 ToolbarItem(placement: .primaryAction) {

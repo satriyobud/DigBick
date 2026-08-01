@@ -16,6 +16,7 @@ class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
 struct WebView: NSViewRepresentable {
     let htmlContent: String
     let baseURL: URL
+    var theme: AppTheme = .system
     
     @Binding var searchText: String
     @Binding var isSearching: Bool
@@ -63,6 +64,11 @@ struct WebView: NSViewRepresentable {
             nsView.loadHTMLString(htmlContent, baseURL: baseURL)
         }
         
+        if context.coordinator.lastTheme != theme {
+            context.coordinator.lastTheme = theme
+            nsView.evaluateJavaScript("if (window.digbickSetTheme) window.digbickSetTheme('\(theme.rawValue)');")
+        }
+        
         let queryChanged = context.coordinator.lastSearchText != searchText
         let visibilityChanged = context.coordinator.lastIsSearching != isSearching
         
@@ -107,6 +113,7 @@ struct WebView: NSViewRepresentable {
         var lastLoadedContentHash: Int = 0
         var lastSearchText: String?
         var lastIsSearching: Bool?
+        var lastTheme: AppTheme?
         var didRestoreScroll = false
         
         init(_ parent: WebView) {
@@ -153,6 +160,7 @@ struct WebView: NSViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             self.webViewInstance = webView
+            webView.evaluateJavaScript("if (window.digbickSetTheme) window.digbickSetTheme('\(parent.theme.rawValue)');")
             if !didRestoreScroll {
                 if let y = parent.savedScrollY {
                     webView.evaluateJavaScript("if (window.digbickRestoreScroll) { window.digbickRestoreScroll(\(y)); }")
